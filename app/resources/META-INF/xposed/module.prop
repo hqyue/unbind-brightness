@@ -1,0 +1,8 @@
+id=com.unbind.brightness
+name=亮度解绑
+version=v1.0
+versionCode=1
+author=hqyue
+minApiVersion=102
+targetApiVersion=102
+staticScope=false

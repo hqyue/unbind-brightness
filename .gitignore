@@ -1,0 +1,21 @@
+# ---- 构建产物 ----
+out/
+build/
+*.apk
+*.aab
+
+# ---- 签名密钥（绝不入库）----
+*.jks
+*.keystore
+keystore.properties
+
+# ---- 编辑器 / 系统 ----
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ---- 日志与临时文件 ----
+*.log
+*.flata
