@@ -17,6 +17,4 @@
 ### 说明
 
 - 仅适配 HyperOS 4 / Android 17（SDK 37），libxposed API 102。
-- v20–v26 为调试期中间版本，未对外发布。
-
 [1.0]: https://github.com/hqyue/unbind-brightness/releases/tag/v1.0
