@@ -1,6 +1,6 @@
 # 亮度解绑 · Unbind Brightness
 
-> 让 HyperOS 4 上的第三方视频 App 亮度只作用于显示层，不再偷偷改掉你的系统亮度。
+> 让 HyperOS 4 上的第三方视频 App 亮度只作用于显示层，不再偷偷改掉你的系统亮度。纯AI搓的！！！
 
 > ⚠️ **非官方项目**：与 Xiaomi / HyperOS / MIUI 官方无任何关联，未获官方授权或背书。「HyperOS」「澎湃」等为小米商标，此处仅作兼容性说明使用。
 
@@ -43,56 +43,6 @@ HyperOS 4 改变了这个行为：视频亮度会被**写回**成系统亮度基
 4. **重启手机**。`system_server` 必须重启才会重新加载模块。
 
 > 需要 root + LSPosed（libxposed API 102 及以上）。仅适配 HyperOS 4 / Android 17（SDK 37）。
-
-## 原理
-
-以下结论来自真机 framework 的 smali 字节码对比，不是对 AOSP 源码的推测。
-
-HyperOS 4 相比 HyperOS 3，多出整条"前台应用亮度同步"管道：
-
-```
-requestBrightnessSync(F)                    // p4 新增，p3 完全没有
-  → consumePendingBrightnessSync()          // 恒返回 true
-  → syncBrightnessToSettingAndUi()
-      → updateScreenBrightnessSetting(FFF)  // 改内存里的系统亮度基值
-      → saveBrightnessIfNeeded()            // 落盘 Settings.System.SCREEN_BRIGHTNESS
-```
-
-方法签名差异是最直接的证据：
-
-| 方法 | HyperOS 3 | HyperOS 4 |
-|---|---|---|
-| `updateScreenBrightnessSetting` | `(F F)V` | `(F F` **`F`** `)V` |
-
-多出来的第三个 `float` 就是 override 回写值。
-
-真机日志统计也印证了这条链是单向的：拦截 `requestBrightnessSync` 后，下游 `updateScreenBrightnessSetting` 与 `saveBrightnessIfNeeded` 命中 **0 次**；不拦截时 `saveBrightnessIfNeeded` 被拦截 **41 次**。也就是说下游全是死代码，在源头做一次 no-op 就能断掉整条管道，不需要逐个封堵。
-
-### 钩子清单
-
-| 序号 | 目标方法 | 职责 |
-|---|---|---|
-| 核心 | `DisplayPowerControllerImpl.requestBrightnessSync(F)V` | no-op，源头掐断写回管道（等于还原 HyperOS 3 行为） |
-| 1 | `DisplayPowerController.setBrightnessOverrideRequest(...)` | 观察视频 override 的进入/退出，退出时开启回落窗口并记录自动亮度基线 |
-| 2 | `AutomaticBrightnessController.getAutomaticScreenBrightness(...)` | NaN 桥接：传感器暂停的空窗期用进视频前的基线顶住，防止闪屏 |
-| 3 | `DisplayPowerController.animateScreenBrightness(F F F Z)V` | 退出后 6 秒窗口内强制慢速回落 |
-| 4–7 | `getOverrideLimitBrightness` / `getCustomBrightnessForRefactorPolicy` / `setMinLogicalNit` / `updateBrightnessStateForIPA` | 仅在自动模式首次进入视频时装载，neutralize 掉 HyperOS 4 的自动亮度新增逻辑 |
-
-每个钩子独立 try-catch，任何一个失败都不会影响 `system_server` 稳定性，也不会导致系统崩溃。
-
-### 关于"断崖式回落"
-
-`animateScreenBrightness(target, sdrTarget, rate, userInitiated)` 的第 3 个参数 `rate` 单位是**亮度单位/秒**（`RampAnimator.performNextAnimationStep` 每帧位移 = `mRate × 帧时长`）。
-
-系统自带 Slow / Fast 两套速率，而 override 退出走的是 Fast——所以原生表现是直接跳变。本模块在退出窗口内把 `rate` 改写为：
-
-```
-rate = |目标 − 当前| / 2.5s
-```
-
-即固定 2.5 秒完成过渡。当前亮度实时读自 `mScreenBrightnessRampAnimator.mFirst.mCurrentValue`（屏幕上正在显示的值），所以无论跨度多大，观感都是同一个节奏。仅当跨度 > 0.04 时才强制，避免拖慢自动模式的正常微调。
-
-手动模式与自动模式共用同一个钩子，没有分模式分支。
 
 ## 构建
 
